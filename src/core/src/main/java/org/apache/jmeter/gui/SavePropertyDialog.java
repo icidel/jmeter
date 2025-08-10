@@ -18,8 +18,11 @@
 package org.apache.jmeter.gui;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.Frame;
-import java.awt.GridLayout;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.lang.reflect.InvocationTargetException;
@@ -29,13 +32,16 @@ import java.util.Map;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
+import javax.swing.Box;
 import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRootPane;
+import javax.swing.JTabbedPane;
 
 import org.apache.jmeter.gui.action.KeyStrokes;
 import org.apache.jmeter.samplers.SampleSaveConfiguration;
@@ -87,9 +93,23 @@ public class SavePropertyDialog extends JDialog implements ActionListener {
 
     private void initDialog() {
         this.getContentPane().setLayout(new BorderLayout());
-        final int configCount = (SampleSaveConfiguration.SAVE_CONFIG_NAMES.size() / 3) + 1;
-        log.debug("grid panel is {} by {}", 3, configCount);
-        JPanel checkPanel = new JPanel(new GridLayout(configCount, 3));
+
+        JTabbedPane tabbedPane = new JTabbedPane();
+        JPanel csvPanel = new JPanel(new GridBagLayout());
+        JPanel xmlPanel = new JPanel(new GridBagLayout());
+        JPanel defaultPanel = new JPanel(new GridBagLayout());
+        tabbedPane.add("Default", defaultPanel);
+        tabbedPane.add("CSV", csvPanel);
+        tabbedPane.add("XML", xmlPanel);
+
+        GridBagConstraints constraints = new GridBagConstraints();
+        constraints.anchor = GridBagConstraints.WEST;
+        constraints.gridx = 0;
+        constraints.gridy = 0;
+        constraints.gridwidth = 1;
+        constraints.fill = GridBagConstraints.HORIZONTAL;
+        constraints.weightx = 1.0;
+
         for (final String name : SampleSaveConfiguration.SAVE_CONFIG_NAMES) {
             try {
                 JCheckBox check = new JCheckBox(
@@ -101,15 +121,76 @@ public class SavePropertyDialog extends JDialog implements ActionListener {
                 if (!functors.containsKey(actionCommand)) {
                     functors.put(actionCommand, new Functor(actionCommand));
                 }
-                checkPanel.add(check, BorderLayout.NORTH);
+
+                JPanel currentPanel;
+                if (name.equals("FieldNames")) {
+                    currentPanel = csvPanel;
+                } else if (name.equals("RequestHeaders") || name.equals("SamplerData") ||
+                           name.equals("ResponseHeaders") || name.equals("ResponseData") ||
+                           name.equals("Subresults") || name.equals("Assertions") ||
+                           name.equals("AssertionResultsFailureMessage") || name.equals("FileName") ||
+                           name.equals("Hostname") || name.equals("Url")) {
+                    currentPanel = xmlPanel;
+                } else {
+                    currentPanel = defaultPanel;
+                }
+
+                constraints.gridy++;
+                if ("SamplerData".equals(name)) {
+                    Box box = Box.createHorizontalBox();
+                    box.add(check);
+                    box.add(new JLabel(" (" + JMeterUtils.getResString("samplerdata_contains_cookies") + ")"));
+                    currentPanel.add(box, constraints);
+                } else {
+                    currentPanel.add(check, constraints);
+                }
+
+                if ("AsXml".equals(name)) {
+                    check.addActionListener(e -> {
+                        enableTabs(tabbedPane, ((JCheckBox) e.getSource()).isSelected());
+                    });
+                }
+
             } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
                 log.warn("Problem creating save config dialog", e);
             }
         }
-        getContentPane().add(checkPanel, BorderLayout.NORTH);
+
+        // Initial state
+        try {
+            enableTabs(tabbedPane, getSaveState(SampleSaveConfiguration.getterName("AsXml")));
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+            log.warn("Could not read initial state of AsXml checkbox", e);
+        }
+
+        // Add some space at the bottom
+        constraints.gridy++;
+        constraints.weighty = 1.0;
+        defaultPanel.add(new JLabel(), constraints);
+        csvPanel.add(new JLabel(), constraints);
+        xmlPanel.add(new JLabel(), constraints);
+
+
+        getContentPane().add(tabbedPane, BorderLayout.CENTER);
         JButton exit = new JButton(JMeterUtils.getResString("done")); // $NON-NLS-1$
         this.getContentPane().add(exit, BorderLayout.SOUTH);
         exit.addActionListener(e -> dispose());
+    }
+
+    private void enableTabs(JTabbedPane tabbedPane, boolean xmlSelected) {
+        // CSV Tab is at index 1
+        setEnabled(tabbedPane.getComponentAt(1), !xmlSelected);
+        // XML Tab is at index 2
+        setEnabled(tabbedPane.getComponentAt(2), xmlSelected);
+    }
+
+    private void setEnabled(Component component, boolean enabled) {
+        component.setEnabled(enabled);
+        if (component instanceof Container) {
+            for (Component child : ((Container) component).getComponents()) {
+                setEnabled(child, enabled);
+            }
+        }
     }
 
     @Override
