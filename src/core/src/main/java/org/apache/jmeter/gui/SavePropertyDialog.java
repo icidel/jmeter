@@ -177,14 +177,14 @@ public class SavePropertyDialog extends JDialog implements ActionListener {
         exit.addActionListener(e -> dispose());
     }
 
-    private void enableTabs(JTabbedPane tabbedPane, boolean xmlSelected) {
+    private static void enableTabs(JTabbedPane tabbedPane, boolean xmlSelected) {
         // CSV Tab is at index 1
         setEnabled(tabbedPane.getComponentAt(1), !xmlSelected);
         // XML Tab is at index 2
         setEnabled(tabbedPane.getComponentAt(2), xmlSelected);
     }
 
-    private void setEnabled(Component component, boolean enabled) {
+    private static void setEnabled(Component component, boolean enabled) {
         component.setEnabled(enabled);
         if (component instanceof Container) {
             for (Component child : ((Container) component).getComponents()) {
