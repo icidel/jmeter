@@ -18,8 +18,11 @@
 package org.apache.jmeter.gui;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.Frame;
-import java.awt.GridLayout;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.lang.reflect.InvocationTargetException;
@@ -29,13 +32,16 @@ import java.util.Map;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
+import javax.swing.Box;
 import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRootPane;
+import javax.swing.JTabbedPane;
 
 import org.apache.jmeter.gui.action.KeyStrokes;
 import org.apache.jmeter.samplers.SampleSaveConfiguration;
@@ -87,10 +93,67 @@ public class SavePropertyDialog extends JDialog implements ActionListener {
 
     private void initDialog() {
         this.getContentPane().setLayout(new BorderLayout());
-        final int configCount = (SampleSaveConfiguration.SAVE_CONFIG_NAMES.size() / 3) + 1;
-        log.debug("grid panel is {} by {}", 3, configCount);
-        JPanel checkPanel = new JPanel(new GridLayout(configCount, 3));
+
+        JCheckBox asXml = null;
+        try {
+            asXml = new JCheckBox(JMeterUtils.getResString(RESOURCE_PREFIX + "AsXml"), getSaveState(SampleSaveConfiguration.getterName("AsXml")));
+            asXml.addActionListener(this);
+            final String actionCommand = SampleSaveConfiguration.setterName("AsXml");
+            asXml.setActionCommand(actionCommand);
+            if (!functors.containsKey(actionCommand)) {
+                functors.put(actionCommand, new Functor(actionCommand));
+            }
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+            log.warn("Problem creating 'Save as XML' checkbox", e);
+        }
+
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        if (asXml != null) {
+            mainPanel.add(asXml, BorderLayout.NORTH);
+        }
+
+        JTabbedPane tabbedPane = new JTabbedPane();
+        JPanel csvPanel = new JPanel(new GridBagLayout());
+        JPanel xmlPanel = new JPanel(new GridBagLayout());
+
+        JPanel defaultPanel = new JPanel(new BorderLayout());
+
+        JPanel samplerPanel = new JPanel(new GridBagLayout());
+        samplerPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Sampler Settings"));
+        JPanel dataPanel = new JPanel(new GridBagLayout());
+        dataPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Data Settings"));
+        JPanel networkPanel = new JPanel(new GridBagLayout());
+        networkPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Network Settings"));
+        JPanel timePanel = new JPanel(new GridBagLayout());
+        timePanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Time Settings"));
+        JPanel assertionsPanel = new JPanel(new GridBagLayout());
+        assertionsPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Assertions Settings"));
+
+        Box defaultBox = Box.createVerticalBox();
+        defaultBox.add(samplerPanel);
+        defaultBox.add(dataPanel);
+        defaultBox.add(networkPanel);
+        defaultBox.add(timePanel);
+        defaultBox.add(assertionsPanel);
+
+        defaultPanel.add(defaultBox, BorderLayout.NORTH);
+
+        tabbedPane.add("Default", defaultPanel);
+        tabbedPane.add("CSV", csvPanel);
+        tabbedPane.add("XML", xmlPanel);
+
+        GridBagConstraints constraints = new GridBagConstraints();
+        constraints.anchor = GridBagConstraints.WEST;
+        constraints.gridx = 0;
+        constraints.gridy = 0;
+        constraints.gridwidth = 1;
+        constraints.fill = GridBagConstraints.HORIZONTAL;
+        constraints.weightx = 1.0;
+
         for (final String name : SampleSaveConfiguration.SAVE_CONFIG_NAMES) {
+            if ("AsXml".equals(name)) {
+                continue;
+            }
             try {
                 JCheckBox check = new JCheckBox(
                         JMeterUtils.getResString(RESOURCE_PREFIX + name),
@@ -101,15 +164,105 @@ public class SavePropertyDialog extends JDialog implements ActionListener {
                 if (!functors.containsKey(actionCommand)) {
                     functors.put(actionCommand, new Functor(actionCommand));
                 }
-                checkPanel.add(check, BorderLayout.NORTH);
+
+                JPanel currentPanel;
+                String label = JMeterUtils.getResString(RESOURCE_PREFIX + name);
+                if (label.endsWith("(CSV)")) {
+                    currentPanel = csvPanel;
+                } else if (label.endsWith("(XML)")) {
+                    currentPanel = xmlPanel;
+                } else {
+                    switch (name) {
+                        case "Label":
+                        case "ThreadName":
+                            currentPanel = samplerPanel;
+                            break;
+                        case "Bytes":
+                        case "SentBytes":
+                        case "DataType":
+                        case "Encoding":
+                        case "Code":
+                        case "Message":
+                        case "FileName":
+                            currentPanel = dataPanel;
+                            break;
+                        case "Hostname":
+                        case "Url":
+                            currentPanel = networkPanel;
+                            break;
+                        case "Timestamp":
+                        case "IdleTime":
+                        case "Time":
+                        case "ConnectTime":
+                        case "Latency":
+                            currentPanel = timePanel;
+                            break;
+                        case "Success":
+                        case "SampleCount":
+                        case "Subresults":
+                            currentPanel = assertionsPanel;
+                            break;
+                        default:
+                            currentPanel = defaultPanel;
+                            break;
+                    }
+                }
+
+                constraints.gridy++;
+                if ("SamplerData".equals(name)) {
+                    JPanel samplerDataPanel = new JPanel();
+                    samplerDataPanel.setLayout(new BorderLayout());
+                    samplerDataPanel.add(check, BorderLayout.NORTH);
+                    JLabel explanation = new JLabel(" (" + JMeterUtils.getResString("samplerdata_contains_cookies") + ")");
+                    explanation.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 10, 0, 0));
+                    samplerDataPanel.add(explanation, BorderLayout.SOUTH);
+                    currentPanel.add(samplerDataPanel, constraints);
+                } else {
+                    currentPanel.add(check, constraints);
+                }
+
             } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
                 log.warn("Problem creating save config dialog", e);
             }
         }
-        getContentPane().add(checkPanel, BorderLayout.NORTH);
+
+        if (asXml != null) {
+            final JCheckBox finalAsXml = asXml;
+            asXml.addActionListener(e -> {
+                enableTabs(tabbedPane, finalAsXml.isSelected());
+            });
+            enableTabs(tabbedPane, asXml.isSelected());
+        }
+
+
+        // Add some space at the bottom
+        constraints.gridy++;
+        constraints.weighty = 1.0;
+        defaultPanel.add(new JLabel(), constraints);
+        csvPanel.add(new JLabel(), constraints);
+        xmlPanel.add(new JLabel(), constraints);
+
+        mainPanel.add(tabbedPane, BorderLayout.CENTER);
+        getContentPane().add(mainPanel, BorderLayout.CENTER);
         JButton exit = new JButton(JMeterUtils.getResString("done")); // $NON-NLS-1$
         this.getContentPane().add(exit, BorderLayout.SOUTH);
         exit.addActionListener(e -> dispose());
+    }
+
+    private static void enableTabs(JTabbedPane tabbedPane, boolean xmlSelected) {
+        // CSV Tab is at index 1
+        setEnabled(tabbedPane.getComponentAt(1), !xmlSelected);
+        // XML Tab is at index 2
+        setEnabled(tabbedPane.getComponentAt(2), xmlSelected);
+    }
+
+    private static void setEnabled(Component component, boolean enabled) {
+        component.setEnabled(enabled);
+        if (component instanceof Container) {
+            for (Component child : ((Container) component).getComponents()) {
+                setEnabled(child, enabled);
+            }
+        }
     }
 
     @Override
