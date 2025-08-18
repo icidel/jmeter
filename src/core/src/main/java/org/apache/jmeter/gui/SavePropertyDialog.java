@@ -94,10 +94,50 @@ public class SavePropertyDialog extends JDialog implements ActionListener {
     private void initDialog() {
         this.getContentPane().setLayout(new BorderLayout());
 
+        JCheckBox asXml = null;
+        try {
+            asXml = new JCheckBox(JMeterUtils.getResString(RESOURCE_PREFIX + "AsXml"), getSaveState(SampleSaveConfiguration.getterName("AsXml")));
+            asXml.addActionListener(this);
+            final String actionCommand = SampleSaveConfiguration.setterName("AsXml");
+            asXml.setActionCommand(actionCommand);
+            if (!functors.containsKey(actionCommand)) {
+                functors.put(actionCommand, new Functor(actionCommand));
+            }
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+            log.warn("Problem creating 'Save as XML' checkbox", e);
+        }
+
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        if (asXml != null) {
+            mainPanel.add(asXml, BorderLayout.NORTH);
+        }
+
         JTabbedPane tabbedPane = new JTabbedPane();
         JPanel csvPanel = new JPanel(new GridBagLayout());
         JPanel xmlPanel = new JPanel(new GridBagLayout());
-        JPanel defaultPanel = new JPanel(new GridBagLayout());
+
+        JPanel defaultPanel = new JPanel(new BorderLayout());
+
+        JPanel samplerPanel = new JPanel(new GridBagLayout());
+        samplerPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Sampler Settings"));
+        JPanel dataPanel = new JPanel(new GridBagLayout());
+        dataPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Data Settings"));
+        JPanel networkPanel = new JPanel(new GridBagLayout());
+        networkPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Network Settings"));
+        JPanel timePanel = new JPanel(new GridBagLayout());
+        timePanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Time Settings"));
+        JPanel assertionsPanel = new JPanel(new GridBagLayout());
+        assertionsPanel.setBorder(javax.swing.BorderFactory.createTitledBorder("Assertions Settings"));
+
+        Box defaultBox = Box.createVerticalBox();
+        defaultBox.add(samplerPanel);
+        defaultBox.add(dataPanel);
+        defaultBox.add(networkPanel);
+        defaultBox.add(timePanel);
+        defaultBox.add(assertionsPanel);
+
+        defaultPanel.add(defaultBox, BorderLayout.NORTH);
+
         tabbedPane.add("Default", defaultPanel);
         tabbedPane.add("CSV", csvPanel);
         tabbedPane.add("XML", xmlPanel);
@@ -111,6 +151,9 @@ public class SavePropertyDialog extends JDialog implements ActionListener {
         constraints.weightx = 1.0;
 
         for (final String name : SampleSaveConfiguration.SAVE_CONFIG_NAMES) {
+            if ("AsXml".equals(name)) {
+                continue;
+            }
             try {
                 JCheckBox check = new JCheckBox(
                         JMeterUtils.getResString(RESOURCE_PREFIX + name),
@@ -123,32 +166,59 @@ public class SavePropertyDialog extends JDialog implements ActionListener {
                 }
 
                 JPanel currentPanel;
-                if (name.equals("FieldNames")) {
+                String label = JMeterUtils.getResString(RESOURCE_PREFIX + name);
+                if (label.endsWith("(CSV)")) {
                     currentPanel = csvPanel;
-                } else if (name.equals("RequestHeaders") || name.equals("SamplerData") ||
-                           name.equals("ResponseHeaders") || name.equals("ResponseData") ||
-                           name.equals("Subresults") || name.equals("Assertions") ||
-                           name.equals("AssertionResultsFailureMessage") || name.equals("FileName") ||
-                           name.equals("Hostname") || name.equals("Url")) {
+                } else if (label.endsWith("(XML)")) {
                     currentPanel = xmlPanel;
                 } else {
-                    currentPanel = defaultPanel;
+                    switch (name) {
+                        case "Label":
+                        case "ThreadName":
+                            currentPanel = samplerPanel;
+                            break;
+                        case "Bytes":
+                        case "SentBytes":
+                        case "DataType":
+                        case "Encoding":
+                        case "Code":
+                        case "Message":
+                        case "FileName":
+                            currentPanel = dataPanel;
+                            break;
+                        case "Hostname":
+                        case "Url":
+                            currentPanel = networkPanel;
+                            break;
+                        case "Timestamp":
+                        case "IdleTime":
+                        case "Time":
+                        case "ConnectTime":
+                        case "Latency":
+                            currentPanel = timePanel;
+                            break;
+                        case "Success":
+                        case "SampleCount":
+                        case "Subresults":
+                            currentPanel = assertionsPanel;
+                            break;
+                        default:
+                            currentPanel = defaultPanel;
+                            break;
+                    }
                 }
 
                 constraints.gridy++;
                 if ("SamplerData".equals(name)) {
-                    Box box = Box.createHorizontalBox();
-                    box.add(check);
-                    box.add(new JLabel(" (" + JMeterUtils.getResString("samplerdata_contains_cookies") + ")"));
-                    currentPanel.add(box, constraints);
+                    JPanel samplerDataPanel = new JPanel();
+                    samplerDataPanel.setLayout(new BorderLayout());
+                    samplerDataPanel.add(check, BorderLayout.NORTH);
+                    JLabel explanation = new JLabel(" (" + JMeterUtils.getResString("samplerdata_contains_cookies") + ")");
+                    explanation.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 10, 0, 0));
+                    samplerDataPanel.add(explanation, BorderLayout.SOUTH);
+                    currentPanel.add(samplerDataPanel, constraints);
                 } else {
                     currentPanel.add(check, constraints);
-                }
-
-                if ("AsXml".equals(name)) {
-                    check.addActionListener(e -> {
-                        enableTabs(tabbedPane, ((JCheckBox) e.getSource()).isSelected());
-                    });
                 }
 
             } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
@@ -156,12 +226,14 @@ public class SavePropertyDialog extends JDialog implements ActionListener {
             }
         }
 
-        // Initial state
-        try {
-            enableTabs(tabbedPane, getSaveState(SampleSaveConfiguration.getterName("AsXml")));
-        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
-            log.warn("Could not read initial state of AsXml checkbox", e);
+        if (asXml != null) {
+            final JCheckBox finalAsXml = asXml;
+            asXml.addActionListener(e -> {
+                enableTabs(tabbedPane, finalAsXml.isSelected());
+            });
+            enableTabs(tabbedPane, asXml.isSelected());
         }
+
 
         // Add some space at the bottom
         constraints.gridy++;
@@ -170,8 +242,8 @@ public class SavePropertyDialog extends JDialog implements ActionListener {
         csvPanel.add(new JLabel(), constraints);
         xmlPanel.add(new JLabel(), constraints);
 
-
-        getContentPane().add(tabbedPane, BorderLayout.CENTER);
+        mainPanel.add(tabbedPane, BorderLayout.CENTER);
+        getContentPane().add(mainPanel, BorderLayout.CENTER);
         JButton exit = new JButton(JMeterUtils.getResString("done")); // $NON-NLS-1$
         this.getContentPane().add(exit, BorderLayout.SOUTH);
         exit.addActionListener(e -> dispose());
